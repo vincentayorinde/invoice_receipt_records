@@ -1,4 +1,3 @@
-
 function saveToRecords() {
     var ui = SpreadsheetApp.getUi();
   var response = ui.alert("Are you sure you want to save this record?", ui.ButtonSet.YES_NO);
@@ -54,6 +53,15 @@ function getSheetAsPDF(sheet, fileName) {
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var spreadsheetId = spreadsheet.getId();
   var sheetId = sheet.getSheetId();
+
+ // Set print range to exclude buttons
+  var printRange;
+  if (sheet.getName() === "Invoice") {
+    printRange = "A1:D28"; // Adjust to include content up to row 29, excluding buttons at A29+
+  } else if (sheet.getName() === "Receipt") {
+    printRange = "A1:C25"; // Adjust to include content up to row 24, excluding any potential buttons
+  }
+  sheet.setActiveRange(sheet.getRange(printRange));
   
   var url = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?" +
             "format=pdf" +
@@ -63,13 +71,19 @@ function getSheetAsPDF(sheet, fileName) {
             "&sheetnames=false" +
             "&printtitle=false" +
             "&pagenum=false" +
-            "&gridlines=false";
+            "&gridlines=false" +
+            "&top_margin=0.5" +
+            "&bottom_margin=0.5" +
+            "&left_margin=0.5" +
+            "&right_margin=0.5" +
+            "&range=" + encodeURIComponent(printRange); // Properly encode the range
   
   var response = UrlFetchApp.fetch(url, {
     headers: {
       Authorization: "Bearer " + ScriptApp.getOAuthToken()
     }
   });
+
   
   return response.getBlob().setName(fileName + ".pdf");
 }
@@ -137,6 +151,7 @@ function sendInvoiceEmail() {
   var customerEmail = invoiceSheet.getRange("B7").getValue();
   var customerName = invoiceSheet.getRange("B5").getValue();
   var invoiceNumber = invoiceSheet.getRange("B3").getValue();
+  var totalAmount = invoiceSheet.getRange("D16").getValue();
   
   if (!customerEmail) {
     SpreadsheetApp.getUi().alert("Please enter a customer email in B7.");
@@ -144,13 +159,21 @@ function sendInvoiceEmail() {
   }
   
   var pdfBlob = getSheetAsPDF(invoiceSheet, "Invoice_" + invoiceNumber);
-  var subject = "Invoice #" + invoiceNumber + " from company";
+  var subject = "Invoice #" + invoiceNumber + " from Company";
   var body = "Dear " + customerName + ",\n\n" +
-             "Please find attached your invoice #" + invoiceNumber + ".\n" +
-             "If you have any questions, feel free to reach out.\n\n" +
-             "Best regards,\nYour Company";
-  
-  if (sendEmailViaBrevo(customerEmail, subject, body, pdfBlob, "custom@email.com", "company")) {
+             "I hope this message finds you well. Thank you for choosing Company for your needs.\n\n" +
+             "We have prepared your invoice #" + invoiceNumber + " for the amount of $" + totalAmount.toFixed(2) + ". " +
+             "Please find the detailed invoice attached for your records.\n\n" +
+             "Should you have any questions or require further assistance, please don’t hesitate to reach out to us at email@Company.com or call us at (000) 000-0000. " +
+             "We’re here to assist you!\n\n" +
+             "We appreciate your business and look forward to serving you again.\n\n" +
+             "Warm regards,\n" +
+             "email Team\n" +
+             "Company\n" +
+             "email@Company.com | (000) 000-0000";
+
+
+  if (sendEmailViaBrevo(customerEmail, subject, body, pdfBlob, "email@Company.com", "Company")) {
     SpreadsheetApp.getUi().alert("Invoice emailed successfully to " + customerEmail + "!");
   }
 }
@@ -162,13 +185,14 @@ function sendReceiptEmail() {
   if (response !== ui.Button.YES) {
     return; // Cancel if user clicks No
   }
-  
+
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var receiptSheet = spreadsheet.getSheetByName("Receipt");
   
   var customerEmail = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Invoice").getRange("B7").getValue();
   var customerName = receiptSheet.getRange("B6").getValue();
   var receiptNumber = receiptSheet.getRange("B3").getValue();
+  var amountPaid = receiptSheet.getRange("B7").getValue();
   
   if (!customerEmail) {
     SpreadsheetApp.getUi().alert("Please enter a customer email in Invoice!B7.");
@@ -176,13 +200,20 @@ function sendReceiptEmail() {
   }
   
   var pdfBlob = getSheetAsPDF(receiptSheet, "Receipt_" + receiptNumber);
-  var subject = "Receipt #" + receiptNumber + " from your comany";
+  var subject = "Receipt #" + receiptNumber + " from Company";
   var body = "Dear " + customerName + ",\n\n" +
-             "Please find attached your receipt #" + receiptNumber + ".\n" +
-             "Thank you for your payment!\n\n" +
-             "Best regards,\nYour Company";
+             "I hope you’re doing well. Thank you for your recent payment to Company.\n\n" +
+             "We’re pleased to confirm that we have received your payment of $" + amountPaid.toFixed(2) + ". " +
+             "Please find attached your receipt #" + receiptNumber + " for your records.\n\n" +
+             "If you have any questions or need further assistance, feel free to contact us at email@Company.com or (000) 000-0000. " +
+             "We’re always happy to help!\n\n" +
+             "Thank you for your trust in us. We look forward to serving you again in the future.\n\n" +
+             "Warm regards,\n" +
+             "email Team\n" +
+             "Company\n" +
+             "email@Company.com | (000) 000-0000";
   
-  if (sendEmailViaBrevo(customerEmail, subject, body, pdfBlob, "customer@domain.com", "company")) {
+  if (sendEmailViaBrevo(customerEmail, subject, body, pdfBlob, "email@Company.com", "Company")) {
     SpreadsheetApp.getUi().alert("Receipt emailed successfully to " + customerEmail + "!");
   }
 }
